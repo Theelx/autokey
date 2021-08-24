@@ -164,7 +164,7 @@ class IoMediator(threading.Thread):
         
     # Methods for expansion service ----
 
-    def send_string(self, string: str):
+    def send_string(self, string: str, type_delay=0):
         """
         Sends the given string for output.
         """
@@ -176,12 +176,12 @@ class IoMediator(threading.Thread):
         
         logger.debug("Send via event interface")
         self._clear_modifiers()
-        IoMediator._send_string(string, self.interface)
+        IoMediator._send_string(string, self.interface, type_delay)
         self._reapply_modifiers()
 
     # Mainly static for the purpose of testing
     @staticmethod
-    def _send_string(string, interface):
+    def _send_string(string, interface, type_delay=0):
         modifiers = []
         for section in KEY_SPLIT_RE.split(string):
             if len(section) > 0:
@@ -198,15 +198,15 @@ class IoMediator(threading.Thread):
                         else:
                             interface.send_modified_key(section[0], modifiers)
                             if len(section) > 1:
-                                interface.send_string(section[1:])
+                                interface.send_string(section[1:], type_delay)
                             modifiers = []
                     else:
                         # Normal string/key operation
                         if Key.is_key(section):
                             interface.send_key(section)
                         else:
-                            interface.send_string(section)
-
+                            interface.send_string(section, type_delay)
+                            
     def paste_string(self, string, paste_command: SendMode):
         """
         This method is called for Phrase expansion using one of the clipboard methods.
@@ -279,6 +279,7 @@ class IoMediator(threading.Thread):
         """
         for _ in range(count):
             self.send_key(Key.BACKSPACE)
+            self.flush()
 
     def flush(self):
         self.interface.flush()

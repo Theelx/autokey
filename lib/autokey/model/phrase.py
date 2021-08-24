@@ -51,6 +51,7 @@ class Phrase(AbstractAbbreviation, AbstractHotkey, AbstractWindowFilter):
         self.show_in_tray_menu = False
         self.sendMode = SendMode.CB_CTRL_V
         self.path = path
+        self.type_delay = 0
 
     def build_path(self, base_name=None):
         return model_common.build_path(self, ".txt", base_name)
@@ -73,7 +74,8 @@ class Phrase(AbstractAbbreviation, AbstractHotkey, AbstractWindowFilter):
         d2 = {
             "type": "phrase",
             "matchCase": self.matchCase,
-            "sendMode": self.sendMode.value
+            "sendMode": self.sendMode.value,
+            "type_delay": self.type_delay,
             }
         d.update(d2)
         return d

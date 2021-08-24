@@ -62,6 +62,10 @@ def inject_json_data_scriptphrase(item, data: dict):
     item.description = data["description"]
     item.prompt = data["prompt"]
     item.omitTrigger = data["omitTrigger"]
+    try:
+        item.type_delay = data["type_delay"]
+    except:
+        logger.error("Type delay not found")
     inject_json_data_base(item, data)
 
 

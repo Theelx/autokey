@@ -211,9 +211,9 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
             except ValueError:
                 return "<code%d>" % keyCode
 
-    def send_string(self, string):
+    def send_string(self, string, type_delay=0):
         # Asynchronous send string.
-        self.__enqueue(self.__sendString, string)
+        self.__enqueue(self.__sendString, string, type_delay)
 
     def send_key(self, keyName):
         """
@@ -683,7 +683,7 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
         keyCode, offset = self.__findUsableKeycode(keyCodeList)
         return keyCode, offset
 
-    def __sendString(self, string):
+    def __sendString(self, string, type_delay=0):
         """
         Send a string of printable characters.
         """
@@ -702,6 +702,10 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
         for char in string:
             try:
                 self.__send_keycode_for_char(char, focus)
+                logger.debug("Type delay of "+str(type_delay))
+                if type_delay >= 0:
+                    self.localDisplay.flush()
+                    time.sleep(type_delay)
             except Exception as e:
                 logger.exception("Error sending char %r: %s", char, str(e))
 
