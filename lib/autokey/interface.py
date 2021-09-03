@@ -704,7 +704,7 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
                 self.__send_keycode_for_char(char, focus)
                 logger.debug("Type delay of "+str(type_delay))
                 if type_delay >= 0:
-                    self.localDisplay.flush()
+                    self.flush()
                     time.sleep(type_delay)
             except Exception as e:
                 logger.exception("Error sending char %r: %s", char, str(e))
