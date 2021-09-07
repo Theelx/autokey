@@ -26,7 +26,6 @@ import logging
 import typing
 import threading
 import select
-import queue
 import subprocess
 import time
 
@@ -124,8 +123,8 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
         self.shutdown = False
 
         # Event loop
-        self.eventThread = threading.Thread(target=self.__eventLoop)
-        self.queue = queue.Queue()
+        # self.eventThread = threading.Thread(target=self.__eventLoop)
+        # self.queue = queue.Queue()
 
         # Event listener
         self.listenerThread = threading.Thread(target=self.__flush_events_loop)
@@ -146,47 +145,43 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
 
         self.__ignoreRemap = False
 
-        self.eventThread.start()
+    def start(self):
+        # self.eventThread.start()
         self.listenerThread.start()
 
     def flush(self):
-        self.__enqueue(self.__flush)
+        self.__flush()
 
     def on_keys_changed(self, data=None):
         """
         Update interface when keyboard layout changes.
         """
-        if not self.__ignoreRemap:
-            logger.debug("Recorded keymap change event")
-            self.__ignoreRemap = True
-            time.sleep(0.2)
-            self.__enqueue(self.__ungrab_all_hotkeys)
-            self.__enqueue(self.__delayedInitMappings)
-        else:
-            logger.debug("Ignored keymap change event")
+        self.__ungrab_all_hotkeys()
+        self.__delayedInitMappings()
 
     def press_key(self, keyName):
-        self.__enqueue(self.__pressKey, keyName)
+        self.__pressKey(keyName)
+
+    def release_key(self, keyName):
+        self.__releaseKey(keyName)
 
     def handle_keypress(self, keyCode):
-        self.__enqueue(self.__handleKeyPress, keyCode)
+        self.__handleKeyPress(keyCode)
 
     def handle_keyrelease(self, keyCode):
-        self.__enqueue(self.__handleKeyrelease, keyCode)
+        self.__handleKeyrelease(keyCode)
 
     def grab_keyboard(self):
-        self.__enqueue(self.__grab_keyboard)
+        self.__grab_keyboard()
 
     def ungrab_keyboard(self):
-        self.__enqueue(self.__ungrabKeyboard)
+        self.__ungrabKeyboard()
 
     def grab_hotkey(self, item):
-        self.__enqueue_hotkey_grab_ungrab(item, grab=True)
+        self.__hotkey_grab_ungrab(item, grab=True)
 
     def ungrab_hotkey(self, item):
-        import copy
-        newItem = copy.copy(item)
-        self.__enqueue_hotkey_grab_ungrab(newItem, grab=False)
+        self.__hotkey_grab_ungrab(item, grab=False)
 
     def lookup_string(self, keyCode, shifted, numlock, altGrid):
         if keyCode == 0:
@@ -209,41 +204,36 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
                 return "<code%d>" % keyCode
 
     def send_string(self, string):
-        # Asynchronous send string.
-        self.__enqueue(self.__sendString, string)
+        self.__sendString(string)
 
     def send_key(self, keyName):
         """
         Send a specific non-printing key, eg Up, Left, etc
         """
-        self.__enqueue(self.__sendKey, keyName)
-
-
+        self.__sendKey(keyName)
 
     def fake_keypress(self, keyName):
-         self.__enqueue(self.__fakeKeypress, keyName)
-
-
+        self.__fakeKeypress(keyName)
     def fake_keydown(self, keyName):
-        self.__enqueue(self.__fakeKeydown, keyName)
+        self.__fakeKeydown(keyName)
 
     def fake_keyup(self, keyName):
-        self.__enqueue(self.__fakeKeyup, keyName)
+        self.__fakeKeyup(keyName)
 
     def send_modified_key(self, keyName, modifiers):
         """
         Send a modified key (e.g. when emulating a hotkey)
         """
-        self.__enqueue(self.__sendModifiedKey, keyName, modifiers)
+        self.__sendModifiedKey(keyName, modifiers)
 
     def send_mouse_click(self, xCoord, yCoord, button, relative):
-        self.__enqueue(self.__sendMouseClick, xCoord, yCoord, button, relative)
+        self.__sendMouseClick(xCoord, yCoord, button, relative)
 
     def mouse_press(self, xCoord, yCoord, button):
-        self.__enqueue(self.__mousePress, xCoord, yCoord, button)
+        self.__mousePress(xCoord, yCoord, button)
 
     def mouse_release(self, xCoord, yCoord, button):
-        self.__enqueue(self.__mouseRelease, xCoord, yCoord, button)
+        self.__mouseRelease(xCoord, yCoord, button)
 
     def mouse_location(self):
         pos = self.rootWindow.query_pointer()
@@ -258,20 +248,20 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
 
     def scroll_down(self, number):
         for i in range(0, number):
-            self.__enqueue(self.__scroll, Button.SCROLL_DOWN)
+            self.__scroll(Button.SCROLL_DOWN)
 
     def scroll_up(self, number):
         for i in range(0, number):
-            self.__enqueue(self.__scroll, Button.SCROLL_UP)
+            self.__scroll(Button.SCROLL_UP)
 
     def move_cursor(self, xCoord, yCoord, relative=False, relative_self=False):
-        self.__enqueue(self.__moveCursor, xCoord, yCoord, relative, relative_self)
+        self.__moveCursor(xCoord, yCoord, relative, relative_self)
 
     def send_mouse_click_relative(self, xoff, yoff, button):
-        self.__enqueue(self.__sendMouseClickRelative, xoff, yoff, button)
+        self.__sendMouseClickRelative(xoff, yoff, button)
 
     def handle_mouseclick(self, button, x, y):
-        self.__enqueue(self.__handleMouseclick, button, x, y)
+        self.__handleMouseclick(button, x, y)
 
     def get_window_info(self, window=None, traverse: bool=True) -> WindowInfo:
         try:
@@ -289,39 +279,25 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
         return self.get_window_info(window, traverse).wm_class
 
     def cancel(self):
-        logger.debug("XInterfaceBase: Try to exit event thread.")
-        self.queue.put_nowait((None, None))
-        logger.debug("XInterfaceBase: Event thread exit marker enqueued.")
         self.shutdown = True
-        logger.debug("XInterfaceBase: self.shutdown set to True. This should stop the listener thread.")
+        logger.debug("self.shutdown set to True. This should stop the listener thread.")
         self.listenerThread.join()
-        self.eventThread.join()
         self.localDisplay.flush()
         self.localDisplay.close()
-        self.join()
+
+    def click_middle_mouse_button(self):
+        """Paste using the mouse: Press the second mouse button, then release it again."""
+        self.mouse_press(0,0, X.Button2)
+        self.mouse_release(0,0, X.Button2)
+        logger.debug("Mouse Button2 event sent.")
 
     def __set_lock_keys_state(self):
         ledMask = self.localDisplay.get_keyboard_control().led_mask
         self.mediator.set_modifier_state(Key.CAPSLOCK, (ledMask & CAPSLOCK_LEDMASK) != 0)
         self.mediator.set_modifier_state(Key.NUMLOCK, (ledMask & NUMLOCK_LEDMASK) != 0)
 
-    def __eventLoop(self):
-        while True:
-            method, args = self.queue.get()
-
-            if method is None and args is None:
-                break
-            elif method is not None and args is None:
-                logger.debug("__eventLoop: Got method {} with None arguments!".format(method))
-            try:
-                method(*args)
-            except Exception as e:
-                logger.exception("Error in X event loop thread: {}".format(e))
-
-            self.queue.task_done()
-
-    def __enqueue(self, method: typing.Callable, *args):
-        self.queue.put_nowait((method, args))
+    # def __enqueue(self, method: typing.Callable, *args):
+    #     self.queue.put_nowait((method, args))
 
     def __delayedInitMappings(self):
         self.__initMappings()
@@ -439,7 +415,7 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
                 else:
                     self.__recursive_ungrab(item)
         if grab:
-            self.__enqueue(self.__recurseTree, self.rootWindow, hotkeys)
+            self.__recurseTree(self.rootWindow, hotkeys)
         else:
             self.__recurseTreeUngrab(self.rootWindow, hotkeys)
 
@@ -450,9 +426,9 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
         self.__grab_ungrab_all_hotkeys(grab=True)
 
     def __enqueue_grab(self, item):
-        self.__enqueue(self.__grabHotkey, item.hotKey, item.modifiers, self.rootWindow)
+        self.__grabHotkey(item.hotKey, item.modifiers, self.rootWindow)
         if self.__needsMutterWorkaround(item):
-            self.__enqueue(self.__grabRecurse, item, self.rootWindow, False)
+            self.__grabRecurse(item, self.rootWindow, False)
 
     def __recurseTree(self, parent, hotkeys):
         self.__recurse_tree_grab_ungrab(parent, hotkeys, grab=True)
@@ -492,7 +468,7 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
                                 self.__ungrabHotkey(item.hotKey, item.modifiers, window)
                                 self.__ungrabRecurse(item, window, False)
 
-                self.__enqueue(self.__recurse_tree_grab_ungrab, window, hotkeys, grab)
+                self.__recurse_tree_grab_ungrab(window, hotkeys, grab)
             except:
                 ungrab = "" if grab else "un"
                 logger.exception("{}grab on window failed".format(ungrab))
@@ -512,9 +488,9 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
         window_info = self.get_window_info(window)
         for item in hotkeys:
             if item.get_applicable_regex() is not None and item._should_trigger_window_title(window_info):
-                self.__enqueue(self.__grabHotkey, item.hotKey, item.modifiers, window)
+                self.__grabHotkey(item.hotKey, item.modifiers, window)
             elif self.__needsMutterWorkaround(item):
-                self.__enqueue(self.__grabHotkey, item.hotKey, item.modifiers, window)
+                self.__grabHotkey(item.hotKey, item.modifiers, window)
 
     def __grabHotkey(self, key, modifiers, window):
         """
@@ -557,7 +533,7 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
             masks.append(basemask|self.modMasks[Key.CAPSLOCK]|self.modMasks[Key.NUMLOCK])
         return masks
 
-    def __enqueue_hotkey_grab_ungrab(self, item, grab=True):
+    def __hotkey_grab_ungrab(self, item, grab=True):
         """
         If the hotkey has no filter regex, it is global and is (un)/grabbed recursively from the root window
         If it has a filter regex, iterate over all children of the root and (un)grab from matching windows
@@ -570,11 +546,11 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
             grab_recurse_func = self.__ungrabRecurse
 
         if item.get_applicable_regex() is None:
-            self.__enqueue(grab_func, item.hotKey, item.modifiers, self.rootWindow)
+            grab_func(item.hotKey, item.modifiers, self.rootWindow)
             if self.__needsMutterWorkaround(item):
-                self.__enqueue(grab_recurse_func, item, self.rootWindow, False)
+                grab_recurse_func(item, self.rootWindow, False)
         else:
-            self.__enqueue(grab_recurse_func, item, self.rootWindow)
+            grab_recurse_func(item, self.rootWindow)
         return
 
     def __grab_ungrab_recurse(self, item, parent, checkWinInfo=True, grab=True):
@@ -861,9 +837,6 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
     def __pressKey(self, keyName):
         self.__sendKeyPressEvent(self.__lookupKeyCode(keyName), 0)
 
-    def release_key(self, keyName):
-        self.__enqueue(self.__releaseKey, keyName)
-
     def __releaseKey(self, keyName):
         self.__sendKeyReleaseEvent(self.__lookupKeyCode(keyName), 0)
 
@@ -893,23 +866,24 @@ class XInterfaceBase(threading.Thread, AbstractMouseInterface, AbstractWindowInt
     def __flush_events(self):
         readable, _, _ = select.select([self.localDisplay], [], [], 1)
         time.sleep(1)
-        if self.localDisplay in readable:
-            createdWindows = []
-            destroyedWindows = []
+        if self.localDisplay not in readable:
+            return
 
-            for _ in range(self.localDisplay.pending_events()):
-                event = self.localDisplay.next_event()
-                if event.type == X.CreateNotify:
-                    createdWindows.append(event.window)
-                if event.type == X.DestroyNotify:
-                    destroyedWindows.append(event.window)
-                if event.type == X.MappingNotify:
-                    logger.debug("X Mapping Event Detected")
-                    self.on_keys_changed()
+        createdWindows = []
+        destroyedWindows = []
+        for _ in range(self.localDisplay.pending_events()):
+            event = self.localDisplay.next_event()
+            if event.type == X.CreateNotify:
+                createdWindows.append(event.window)
+            if event.type == X.DestroyNotify:
+                destroyedWindows.append(event.window)
+            if event.type == X.MappingNotify:
+                logger.debug("X Mapping Event Detected")
+                self.on_keys_changed()
 
-            for window in createdWindows:
-                if window not in destroyedWindows:
-                    self.__enqueue(self.__grabHotkeysForWindow, window)
+        for window in createdWindows:
+            if window not in destroyedWindows:
+                self.__grabHotkeysForWindow(window)
 
     def __handleKeyPress(self, keyCode):
         focus = self.localDisplay.get_input_focus().focus
@@ -1119,6 +1093,10 @@ class XRecordInterface(XInterfaceBase, AbstractSysInterface):
         if not self.recordDisplay.has_extension("RECORD"):
             raise Exception("Your X-Server does not have the RECORD extension available/enabled.")
 
+    def start(self):
+        self.initialise()
+        super().start()
+
     def run(self):
         # Create a recording context; we only want key and mouse events
         self.ctx = self.recordDisplay.record_create_context(
@@ -1146,7 +1124,7 @@ class XRecordInterface(XInterfaceBase, AbstractSysInterface):
 
     def cancel(self):
         self.localDisplay.record_disable_context(self.ctx)
-        XInterfaceBase.cancel(self)
+        return super().cancel()
 
     def __processEvent(self, reply):
         if reply.category != record.FromServer:
@@ -1174,6 +1152,7 @@ class AtSpiInterface(XInterfaceBase, AbstractSysInterface):
         self.registry = pyatspi.Registry
 
     def start(self):
+        self.initialise()
         logger.info("AT-SPI interface thread starting")
         self.registry.registerKeystrokeListener(self.__processKeyEvent, mask=pyatspi.allModifiers())
         self.registry.registerEventListener(self.__processMouseEvent, 'mouse:button')
