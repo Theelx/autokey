@@ -50,6 +50,8 @@ class Clipboard(AbstractClipboard):
 
     def __init__(self):
         self.cb = APIClipboard()
+        self.backup_clipboard = None
+        self.backup_selection = None
 
     @property
     def text(self):
@@ -64,3 +66,21 @@ class Clipboard(AbstractClipboard):
     @selection.setter
     def selection(self, new_content: str):
         self.cb.fill_selection(new_content)
+
+    # def __restore_clipboard_selection(self, backup: str):
+    #     """Restore the selection clipboard content."""
+    #     # Pasting takes some time, so wait a bit before restoring the content. Otherwise the restore is done before
+    #     # the pasting happens, causing the backup to be pasted instead of the desired clipboard content.
+
+    #     # Programmatically pressing the middle mouse button seems VERY slow, so wait rather long.
+    #     # It might be a good idea to make this delay configurable. There might be systems that need even longer.
+    #     time.sleep(1)
+    #     backup = self.backup_selection if self.backup_selection is not None else ""
+    #     self.cb.fill_selection(backup)
+
+    # def __restore_clipboard_text(self, backup: str):
+    #     """Restore the clipboard content."""
+    #     # Pasting takes some time, so wait a bit before restoring the content. Otherwise the restore is done before
+    #     # the pasting happens, causing the backup to be pasted instead of the desired clipboard content.
+    #     time.sleep(0.2)
+    #     self.clipboard.text = backup if backup is not None else ""
