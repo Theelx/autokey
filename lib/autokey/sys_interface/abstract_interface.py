@@ -16,9 +16,6 @@
 from abc import ABC, ABCMeta, abstractmethod
 import typing
 
-from autokey import common
-from autokey.scripting import Clipboard as APIClipboard
-
 logger = __import__("autokey.logger").logger.get_logger(__name__)
 
 # This tuple is used to return requested window properties.
@@ -50,6 +47,9 @@ class AbstractSysInterface(ABC, metaclass=ABCMeta):
     def press_key(self, keyName):
         return
     @abstractmethod
+    def release_key(self, keyName):
+        return
+    @abstractmethod
     def handle_keypress(self, keyCode):
         return
     @abstractmethod
@@ -77,9 +77,6 @@ class AbstractSysInterface(ABC, metaclass=ABCMeta):
         return
     @abstractmethod
     def send_modified_key(self, key_name, modifiers):
-        return
-    @abstractmethod
-    def send_string_clipboard(self, key_name):
         return
     @abstractmethod
     def fake_keydown(self, key_name):
@@ -111,6 +108,9 @@ class AbstractMouseInterface(ABC, metaclass=ABCMeta):
         return
     @abstractmethod
     def relative_mouse_location(self, window=None):
+        return
+    @abstractmethod
+    def click_middle_mouse_button(self):
         return
     @abstractmethod
     def scroll_down(self, number):
