@@ -14,7 +14,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import threading
+import typing
 import queue
+import copy
+import time
 
 import autokey
 from autokey import common
@@ -22,6 +25,7 @@ from autokey.configmanager.configmanager import ConfigManager
 from autokey.configmanager.configmanager_constants import INTERFACE_TYPE
 from autokey.interface import XRecordInterface, AtSpiInterface
 from autokey.sys_interface.clipboard import Clipboard
+from autokey.sys_interface.async_interface_wrapper import AsyncInterfaceWrapper
 from autokey.model.phrase import SendMode
 
 from autokey.model.key import Key, KEY_SPLIT_RE, MODIFIERS, HELD_MODIFIERS
@@ -50,6 +54,7 @@ class IoMediator(threading.Thread):
         self.queue = queue.Queue()
         self.listeners.append(service)
         self.interfaceType = ConfigManager.SETTINGS[INTERFACE_TYPE]
+        self.app = service.app
         
         # Modifier tracking
         self.modifiers = {
@@ -65,18 +70,24 @@ class IoMediator(threading.Thread):
         }
         
         if self.interfaceType == X_RECORD_INTERFACE:
-            self.interface = XRecordInterface(self, service.app)
+            self.interface = AsyncInterfaceWrapper(XRecordInterface(self, self.app))
         else:
-            self.interface = AtSpiInterface(self, service.app)
+            self.interface = AsyncInterfaceWrapper(AtSpiInterface(self, self.app))
+        self.interface.start()
+
+        self.clipboard = Clipboard()
 
         global CURRENT_INTERFACE
         CURRENT_INTERFACE = self.interface
         logger.info("Created IoMediator instance, current interface is: {}".format(CURRENT_INTERFACE))
 
-    def start(self):
-        self.interface.initialise()
-        self.interface.start()
-        super().start()
+    def __enqueue(self, method: typing.Callable, *args):
+        self.queue.put_nowait((method, args))
+
+    # def start(self):
+    #     # self.interface.initialise()
+    #     # self.interface.start()
+    #     super().start()
 
 
     def shutdown(self):
@@ -96,7 +107,8 @@ class IoMediator(threading.Thread):
     def grab_hotkey(self, item):
         self.interface.grab_hotkey(item)
     def ungrab_hotkey(self, item):
-        self.interface.ungrab_hotkey(item)
+        newItem = copy.copy(item)
+        self.interface.ungrab_hotkey(newItem)
 
     # Callback methods for Interfaces ----
 
@@ -354,12 +366,3 @@ class IoMediator(threading.Thread):
         self.__enqueue(self.interface.click_middle_mouse_button)
         self.__enqueue(self.__restore_clipboard_selection, backup)
 
-    def __restore_clipboard_selection(self, backup: str):
-        """Restore the selection clipboard content."""
-        # Pasting takes some time, so wait a bit before restoring the content. Otherwise the restore is done before
-        # the pasting happens, causing the backup to be pasted instead of the desired clipboard content.
-
-        # Programmatically pressing the middle mouse button seems VERY slow, so wait rather long.
-        # It might be a good idea to make this delay configurable. There might be systems that need even longer.
-        time.sleep(1)
-        self.clipboard.selection = backup if backup is not None else ""
